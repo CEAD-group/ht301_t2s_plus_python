@@ -6,6 +6,8 @@ from sys import platform
 from time import sleep
 from typing import Tuple
 
+import os
+
 import cv2
 import numpy as np
 
@@ -67,6 +69,7 @@ class Camera:
     reference_frame = None
     offset_mean = 0.0
     dead_pixels_mask = None
+    calibration_path = None
 
     def __init__(
         self,
@@ -127,7 +130,8 @@ class Camera:
                     cap_height - ROWS_SPECIAL_DATA,
                 ) in cls.supported_resolutions:
                     return cap
-            except:
+                cap.release()
+            except Exception:
                 pass
         raise ValueError(
             f"Cannot find camera with a width of one of {cls.supported_resolutions} that also matches: {cap_width=} and {cap_height=}"
@@ -495,25 +499,37 @@ class Camera:
         else:
             raise RuntimeError("Failed to capture reference frame")
 
-        # dead pixel correction
+        # dead/hot pixel correction using symmetric threshold
         frame_visible_float = frame_visible.astype(np.float32)
         min_val = np.min(frame_visible_float)
         max_val = np.max(frame_visible_float)
-        print(f"Min: {min_val}, Max: {max_val}, Avg: {np.mean(frame_visible_float)}")
-        threshold_margin = (
-            max_val - min_val
-        ) * 0.05  # Adjust the margin if not detected correctly
-        threshold = min_val + threshold_margin
+        val_range = max_val - min_val
+        if not quiet:
+            print(f"Min: {min_val}, Max: {max_val}, Avg: {np.mean(frame_visible_float)}")
+        threshold_margin = val_range * 0.05
 
-        # if there are no dead pixels, we skip the dead pixel correction
-        if np.count_nonzero(frame_visible_float < threshold) != 0:
-            self.dead_pixels_mask = cv2.inRange(
-                frame_visible_float, 0, float(threshold)
-            ).astype(np.uint8)
+        low_threshold = min_val + threshold_margin
+        high_threshold = max_val - threshold_margin
+
+        # detect cold/dead pixels AND hot/stuck pixels
+        cold_mask = cv2.inRange(
+            frame_visible_float, 0, float(low_threshold)
+        ).astype(np.uint8)
+        hot_mask = cv2.inRange(
+            frame_visible_float, float(high_threshold), float(max_val + 1)
+        ).astype(np.uint8)
+        combined_mask = cold_mask | hot_mask
+
+        if np.count_nonzero(combined_mask) > 0:
+            self.dead_pixels_mask = combined_mask
 
         if not quiet:
-            print(f"Found {np.count_nonzero(self.dead_pixels_mask)} dead pixels")
-            print(f"At: {np.argwhere(self.dead_pixels_mask)}")
+            n_cold = np.count_nonzero(cold_mask)
+            n_hot = np.count_nonzero(hot_mask)
+            print(f"Found {n_cold} dead pixels, {n_hot} hot pixels")
+
+        if self.calibration_path:
+            self.save_calibration(self.calibration_path)
 
     def calibrate(self, quiet=False) -> None:
         """camera calibration"""
@@ -674,6 +690,26 @@ class Camera:
     def flush_buffer(self, num_reads=16):
         for i in range(num_reads):
             ret, frame_visible = self.read(raw=True)
+
+    def save_calibration(self, path) -> None:
+        """Save calibration data (reference frame + dead pixel mask) to disk."""
+        np.save(f"{path}_reference.npy", self.reference_frame)
+        if self.dead_pixels_mask is not None:
+            np.save(f"{path}_deadpixels.npy", self.dead_pixels_mask)
+        print(f"Calibration saved to {path}_*.npy")
+
+    def load_calibration(self, path) -> bool:
+        """Load calibration data from disk. Returns True if successful."""
+        ref_file = f"{path}_reference.npy"
+        if not os.path.exists(ref_file):
+            return False
+        self.reference_frame = np.load(ref_file)
+        self.offset_mean = float(np.mean(self.reference_frame))
+        dp_file = f"{path}_deadpixels.npy"
+        if os.path.exists(dp_file):
+            self.dead_pixels_mask = np.load(dp_file)
+        print(f"Calibration loaded from {path}_*.npy")
+        return True
 
 
 class MockVidoCapture:
