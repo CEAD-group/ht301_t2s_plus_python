@@ -480,7 +480,21 @@ class Camera:
         self.cap.set(cv2.CAP_PROP_ZOOM, y1)
 
     def calibrate_raw(self, quiet=False) -> None:
-        """Camera calibration for cameras that return raw data only"""
+        """Camera calibration for cameras that return raw data only (camera_raw=True).
+
+        This is only needed for T2S+ v2 (A2) units where the FPGA does not
+        process the image. On v1 units, the firmware handles NUC and dead pixel
+        correction in hardware, so only the shutter recalibration command
+        (0x8000) is needed -- see calibrate().
+
+        Steps:
+        1. Close the shutter mechanically to get a uniform dark frame
+        2. Capture reference frame for flat-field correction (subtracted from
+           each subsequent frame in read())
+        3. Detect dead pixels (cold) and hot/stuck pixels using a symmetric
+           5% threshold on the shutter-closed frame
+        4. Bad pixels are corrected via cv2.inpaint in read()
+        """
         self.reference_frame = None
         self.offset_mean = 0.0
         self.dead_pixels_mask = None
@@ -532,7 +546,16 @@ class Camera:
             self.save_calibration(self.calibration_path)
 
     def calibrate(self, quiet=False) -> None:
-        """camera calibration"""
+        """Trigger camera calibration.
+
+        For camera_raw=True (T2S+ v2): runs full software NUC calibration
+        including shutter-closed reference frame capture and dead/hot pixel
+        detection.
+
+        For camera_raw=False (T2S+ v1, HT-301, etc.): sends the shutter
+        calibration command (0x8000) to the firmware, which handles NUC and
+        dead pixel correction in hardware.
+        """
         if self.camera_raw:
             self.calibrate_raw(quiet=quiet)
         else:
