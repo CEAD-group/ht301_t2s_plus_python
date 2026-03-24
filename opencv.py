@@ -109,8 +109,10 @@ while True:
 
     frame = rotate_frame(frame, orientation)
 
-    frame = np.kron(frame, np.ones((upscale_factor, upscale_factor, 1))).astype(
-        np.uint8
+    frame = cv2.resize(
+        frame,
+        (frame.shape[1] * upscale_factor, frame.shape[0] * upscale_factor),
+        interpolation=cv2.INTER_NEAREST,
     )
     if draw_temp:
         utils.drawTemperature(
