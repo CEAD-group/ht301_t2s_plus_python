@@ -5,7 +5,6 @@ import time
 
 import cv2
 import numpy as np
-from skimage.exposure import equalize_hist, rescale_intensity
 
 import irpythermal
 import utils
@@ -100,10 +99,9 @@ while True:
     info, lut = camera.info()
     frame = frame.astype(np.float32)
 
-    # Sketchy auto-exposure
-    frame = rescale_intensity(
-        equalize_hist(frame), in_range="image", out_range=(0, 255)
-    ).astype(np.uint8)
+    # Auto-exposure: normalize + histogram equalization
+    frame = cv2.normalize(frame, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+    frame = cv2.equalizeHist(frame)
 
     frame = cv2.applyColorMap(frame, cv2.COLORMAP_INFERNO)
 
