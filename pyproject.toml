@@ -1,24 +1,31 @@
-[tool.poetry]
+[project]
 name = "ir-py-thermal"
 version = "0.1.0"
 description = "ir-py-thermal"
-authors = ["Dima <me@dmytroengineering.com>"]
-repository = "https://github.com/diminDDL/IR-Py-Thermal"
+authors = [{name = "Dima", email = "me@dmytroengineering.com"}]
 readme = "README.md"
-package-mode = false
+requires-python = ">=3.10.4"
+dependencies = [
+    "matplotlib>=3.9.2",
+    "pyserial>=3.5",
+    "scikit-image>=0.25.2",
+    "imageio-ffmpeg>=0.6.0",
+    "imageio>=2.37.2",
+    "pyusb>=1.3.1",
+    "av>=16.0.1",
+    "opencv-python>=4.12.0.88",
+]
 
-[tool.poetry.dependencies]
-python = "^3.10.4"
-opencv-python = "^4.10.0.84"
-matplotlib = "^3.9.2"
-pyserial = "^3.5"
+[project.urls]
+repository = "https://github.com/diminDDL/IR-Py-Thermal"
 
-[tool.poetry.group.dev.dependencies]
-ruff = "^0.7.3"
+[dependency-groups]
+dev = [
+    "ruff>=0.7.3",
+]
 
-[build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+[tool.uv]
+package = false
 
 [tool.ruff.lint]
 select = ["ALL"]
