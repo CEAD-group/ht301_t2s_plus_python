@@ -1,16 +1,18 @@
+#!/usr/bin/env python3
 
-#!/usr/bin/python3
-import numpy as np
-import cv2
-import ht301_hacklib
-import utils
-import time
-from skimage.exposure import rescale_intensity, equalize_hist
 import pickle
+import time
+
+import cv2
+import numpy as np
+
+import irpythermal
+import utils
+
 draw_temp = True
 
 # cap = ht301_hacklib.HT301()
-camera = ht301_hacklib.Camera()
+camera = irpythermal.Camera()
 window_name = str(type(camera).__name__)
 cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 
@@ -97,10 +99,9 @@ while True:
     info, lut = camera.info()
     frame = frame.astype(np.float32)
 
-    # Sketchy auto-exposure
-    frame = rescale_intensity(
-        equalize_hist(frame), in_range="image", out_range=(0, 255)
-    ).astype(np.uint8)
+    # Auto-exposure: normalize + histogram equalization
+    frame = cv2.normalize(frame, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+    frame = cv2.equalizeHist(frame)
 
     frame = cv2.applyColorMap(frame, cv2.COLORMAP_INFERNO)
 
@@ -108,8 +109,10 @@ while True:
 
     frame = rotate_frame(frame, orientation)
 
-    frame = np.kron(frame, np.ones((upscale_factor, upscale_factor, 1))).astype(
-        np.uint8
+    frame = cv2.resize(
+        frame,
+        (frame.shape[1] * upscale_factor, frame.shape[0] * upscale_factor),
+        interpolation=cv2.INTER_NEAREST,
     )
     if draw_temp:
         utils.drawTemperature(
@@ -173,7 +176,7 @@ while True:
         # some delay is needed before calibration
         for _ in range(50):
             camera.read()
-        camera.calibrate() 
+        camera.calibrate()
     if key == ord("s"):
         cv2.imwrite(time.strftime("%Y-%m-%d_%H-%M-%S") + ".png", frame)
     if key == ord("o"):
@@ -183,7 +186,7 @@ while True:
     if key == ord("a"):
         # save to disk
         ret, frame = camera.cap.read()
-        data = (frame)
+        data = frame
         name = time.strftime("%Y-%m-%d_%H-%M-%S") + ".pkl"
         with open(name, "wb") as f:
             pickle.dump(data, f)
